@@ -3,7 +3,7 @@
 This project provides a **remote slicing workflow for Klipper-based 3D printers**.
 
 - **Server-side slicing** is done using **OrcaSlicer (CLI / headless)** on a Raspberry Pi
-- **Local slicing** is optionally done with **Cura (WASD)** on a desktop machine
+- **Local slicing** is optionally done with **Cura (WASM)** on a desktop machine
 - G-Code is sent to Klipper via **Moonraker**
 - Designed for LAN / VPN usage (e.g. Tailscale)
 

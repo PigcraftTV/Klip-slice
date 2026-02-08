@@ -32,10 +32,9 @@ The goal is a **fully open-source, self-hosted alternative** to cloud-based slic
 
 ---
 
-### 2️⃣ Local Slicing (Cura – WASD)
+### 2️⃣ Local Slicing (Cura – WASM)
 
-- Cura runs locally on a desktop PC
-- Slicing is done locally
+- Cura runs locally on a smartphone
 - G-Code is uploaded manually or via Moonraker
 
 **Advantages**

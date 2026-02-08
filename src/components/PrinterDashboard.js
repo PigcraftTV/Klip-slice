@@ -27,27 +27,53 @@ export default function PrinterDashboard() {
     const [webcamUrl, setWebcamUrl] = useState(null);
     const [webcamError, setWebcamError] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
-    const [speedPercent, setSpeedPercent] = useState(100);
-    const [fanPercent, setFanPercent] = useState(100);
-    const [acceleration, setAcceleration] = useState('3000');
+
+    // Get initial values from printer state, don't set hardcoded values
+    const [speedPercent, setSpeedPercent] = useState(activePrinterState.speed || 100);
+    const [fanPercent, setFanPercent] = useState(activePrinterState.fanSpeed || 0);
+    const [acceleration, setAcceleration] = useState(String(activePrinterState.acceleration || 3000));
+
+    // Update local state when printer state changes
+    useEffect(() => {
+        setSpeedPercent(activePrinterState.speed || 100);
+        setFanPercent(activePrinterState.fanSpeed || 0);
+        setAcceleration(String(activePrinterState.acceleration || 3000));
+    }, [activePrinterState.speed, activePrinterState.fanSpeed, activePrinterState.acceleration]);
+
+    const handleSpeedChange = (value) => {
+        setSpeedPercent(value);
+        if (activePrinter?.host) {
+            moonraker.setSpeed(activePrinter.host, Math.round(value));
+        }
+    };
+
+    const handleFanChange = (value) => {
+        setFanPercent(value);
+        if (activePrinter?.host) {
+            moonraker.setFan(activePrinter.host, Math.round(value));
+        }
+    };
+
+    const handleAccelChange = (value) => {
+        setAcceleration(value);
+        const accelNum = parseInt(value);
+        if (activePrinter?.host && !isNaN(accelNum) && accelNum > 0) {
+            moonraker.setAcceleration(activePrinter.host, accelNum);
+        }
+    };
 
     useEffect(() => {
         if (activePrinter?.host) {
             moonraker.connect(activePrinter.host);
-            setWebcamUrl(`http://${activePrinter.host}/webcam/?action=snapshot`);
+            // Webcam on port 80
+            setWebcamUrl(`http://${activePrinter.host}:80/webcam/?action=stream`);
             setWebcamError(false);
-
-            // Refresh webcam at ~30 FPS (33ms) for smooth "stream"
-            const interval = setInterval(() => {
-                setRefreshKey(prev => prev + 1);
-            }, 33);
-
-            return () => {
-                clearInterval(interval);
-                moonraker.disconnect();
-                setWebcamUrl(null);
-            };
         }
+
+        return () => {
+            moonraker.disconnect();
+            setWebcamUrl(null);
+        };
     }, [selectedPrinterId, activePrinter?.host]);
 
     if (!activePrinter) {
@@ -75,7 +101,6 @@ export default function PrinterDashboard() {
             <View style={styles.header}>
                 <View>
                     <Text style={styles.title}>{activePrinter.name}</Text>
-                    <Text style={styles.subtitle}>{isConnected ? 'Connected via Tailscale' : 'Waiting for connection...'}</Text>
                 </View>
                 <StatusBadge status={status} />
             </View>
@@ -83,7 +108,7 @@ export default function PrinterDashboard() {
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 {webcamUrl && !webcamError ? (
                     <Image
-                        source={{ uri: `${webcamUrl}&t=${refreshKey}` }}
+                        source={{ uri: webcamUrl }}
                         style={styles.webcamStream}
                         resizeMode="cover"
                         onError={() => setWebcamError(true)}
@@ -99,12 +124,12 @@ export default function PrinterDashboard() {
 
                 <View style={styles.statsGrid}>
                     <View style={styles.card}>
-                        <Text style={styles.cardIcon}>🔥</Text>
+                        <Thermometer size={24} color="#EF4444" />
                         <Text style={styles.cardLabel}>Hotend</Text>
                         <Text style={styles.cardValue}>{temperature.tool.toFixed(1)}°C</Text>
                     </View>
                     <View style={styles.card}>
-                        <Text style={styles.cardIcon}>🛏️</Text>
+                        <Thermometer size={24} color="#3B82F6" />
                         <Text style={styles.cardLabel}>Bed</Text>
                         <Text style={styles.cardValue}>{temperature.bed.toFixed(1)}°C</Text>
                     </View>
@@ -122,7 +147,7 @@ export default function PrinterDashboard() {
                             minimumValue={50}
                             maximumValue={200}
                             value={speedPercent}
-                            onValueChange={setSpeedPercent}
+                            onValueChange={handleSpeedChange}
                             minimumTrackTintColor="#3B82F6"
                             maximumTrackTintColor="#334155"
                             thumbTintColor="#3B82F6"
@@ -138,7 +163,7 @@ export default function PrinterDashboard() {
                             minimumValue={0}
                             maximumValue={100}
                             value={fanPercent}
-                            onValueChange={setFanPercent}
+                            onValueChange={handleFanChange}
                             minimumTrackTintColor="#3B82F6"
                             maximumTrackTintColor="#334155"
                             thumbTintColor="#3B82F6"
@@ -146,11 +171,12 @@ export default function PrinterDashboard() {
                     </View>
 
                     <View style={styles.controlRow}>
-                        <Text style={styles.controlLabel}>Acceleration (mm/s²)</Text>
+                        <Text style={styles.controlLabel}>Acceleration (mm/s²): {acceleration}</Text>
                         <TextInput
                             style={styles.controlInput}
                             value={acceleration}
                             onChangeText={setAcceleration}
+                            onBlur={() => handleAccelChange(acceleration)}
                             keyboardType="numeric"
                             placeholder="3000"
                             placeholderTextColor="#475569"

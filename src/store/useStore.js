@@ -15,6 +15,9 @@ export const usePrinterStore = create(
         temperature: { tool: 0, bed: 0 },
         progress: 0,
         currentFile: null,
+        fanSpeed: 0,
+        speed: 100,
+        acceleration: 3000,
       },
 
       addPrinter: (printer) => set((state) => ({

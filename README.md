@@ -57,3 +57,9 @@ This project is built for the community. Feel free to contribute by opening issu
 
 ---
 *Developed with ❤️ for the 3D Printing Community.*
+
+
+----
+*Disclaimer*
+
+Im not good in coding with react-native (yet). So I am using Antigravity to help me with certain problems.

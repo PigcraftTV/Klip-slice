@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Switch } from 'react-native';
 import { Layers, Thermometer, Box, Zap, Cpu, Upload, Settings } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import Slider from '@react-native-community/slider';
 import { useAppStore, usePrinterStore } from '../store/useStore';
 import { moonraker } from '../api/moonraker';
+import SlicerBridge from './SlicerBridge';
 
 const CONFIG_OPTIONS = {
     layerHeight: [0.12, 0.16, 0.2, 0.28],
@@ -15,12 +18,20 @@ export default function SlicerConfig({ onSliceLocal, onSliceRemote }) {
     const [selectedProfileId, setSelectedProfileId] = useState(slicingProfiles[0]?.id);
     const selectedProfile = slicingProfiles.find(p => p.id === selectedProfileId) || slicingProfiles[0];
 
+    // Slicing Parameters
     const [selectedLH, setSelectedLH] = useState(selectedProfile?.layerHeight || 0.2);
     const [selectedInfill, setSelectedInfill] = useState(selectedProfile?.infill || 15);
     const [useSupports, setUseSupports] = useState(false);
+
+    // Temperature Controls
+    const [bedTemp, setBedTemp] = useState(60);
+    const [nozzleTemp, setNozzleTemp] = useState(200);
+
     const [sliceStatus, setSliceStatus] = useState(null); // null, 'slicing', 'success', 'error'
     const [gcodeFile, setGcodeFile] = useState(null);
     const [gcodeUri, setGcodeUri] = useState(null);
+
+    const slicerBridgeRef = useRef(null);
 
     useEffect(() => {
         if (selectedProfile) {
@@ -31,110 +42,96 @@ export default function SlicerConfig({ onSliceLocal, onSliceRemote }) {
 
     const getGcodeFilename = () => {
         if (!lastDownloadedFile) return 'model.gcode';
-        // Extract filename without extension and add .gcode
         const name = lastDownloadedFile.split('/').pop().split('.')[0];
         return `${name}.gcode`;
     };
 
-    const handleSliceLocal = () => {
+    const handleSliceLocal = async () => {
         if (!lastDownloadedFile) {
             alert('No STL file loaded! Please download a file first.');
             return;
         }
-        setSliceStatus('slicing');
-        setTimeout(() => {
-            setSliceStatus('success');
-            const filename = getGcodeFilename();
-            setGcodeFile(filename);
-            // In real implementation, this would be the actual file URI
-            setGcodeUri(null); // We don't have real gcode yet
-        }, 2000);
-        onSliceLocal?.();
+
+        try {
+            setSliceStatus('slicing');
+            // Read the file as Base64 to pass to WebView
+            const fileContent = await FileSystem.readAsStringAsync(lastDownloadedFile, {
+                encoding: FileSystem.EncodingType.Base64,
+            });
+
+            const settings = {
+                layerHeight: selectedLH,
+                infill: selectedInfill,
+                bedTemp,
+                nozzleTemp,
+                useSupports
+            };
+
+            // Trigger the bridge
+            slicerBridgeRef.current?.startSlicing(fileContent, settings);
+
+        } catch (error) {
+            console.error('Failed to read STL:', error);
+            alert('Failed to read STL file: ' + error.message);
+            setSliceStatus('error');
+        }
+    };
+
+    const handleSliceComplete = (gcode) => {
+        setSliceStatus('success');
+        const filename = getGcodeFilename();
+        setGcodeFile(filename);
+        // Save the generated G-code to a temporary file
+        const tempPath = FileSystem.cacheDirectory + filename;
+        FileSystem.writeAsStringAsync(tempPath, gcode)
+            .then(() => {
+                setGcodeUri(tempPath);
+                console.log('G-code saved to:', tempPath);
+            })
+            .catch(err => {
+                console.error('Failed to save G-code:', err);
+                alert('Failed to save G-code');
+            });
+    };
+
+    const handleSliceError = (error) => {
+        setSliceStatus('error');
+        alert('Slicing failed: ' + error);
     };
 
     const handleSliceRemote = () => {
-        if (!lastDownloadedFile) {
-            alert('No STL file loaded! Please download a file first.');
-            return;
-        }
-        setSliceStatus('slicing');
-        setTimeout(() => {
-            setSliceStatus('success');
-            const filename = getGcodeFilename();
-            setGcodeFile(filename);
-            setGcodeUri(null);
-        }, 2000);
-        onSliceRemote?.();
+        // ... (keep existing remote logic if needed, or disable)
+        alert('Remote slicing not configured yet.');
     };
-
-
 
     const handleUpload = async (startPrint = false) => {
         const { printers, selectedPrinterId } = usePrinterStore.getState();
         const activePrinter = printers.find(p => p.id === selectedPrinterId);
 
         if (!activePrinter?.host || !gcodeFile) {
-            alert('No printer selected or no file to upload');
+            alert('No printer selected or no gcode generated');
             return;
         }
 
         try {
-            // Enhanced Mock G-code Generator
-            // This creates VALID, PRINTABLE G-code for testing
-            const gcodeContent = `;Generated by Klip-slice (Mock Slicer)
-;Filename: ${gcodeFile}
-;Profile: ${selectedProfile?.name || 'Custom'}
-;Layer Height: ${selectedLH}mm
-;Infill: ${selectedInfill}%
-;Date: ${new Date().toISOString()}
+            let fileUriToUpload = gcodeUri;
 
-M117 Heating Bed...
-M140 S60 ; Set Bed Target
-M190 S60 ; Wait for Bed
+            // If we didn't generate a local file (e.g. from Mock), ensure we have one.
+            // But now handleSliceComplete saves it.
+            if (!fileUriToUpload) {
+                // Fallback for safety or manually generated mock content
+                alert('No G-code file ready.');
+                return;
+            }
 
-M117 Heating Nozzle...
-M104 S200 ; Set Nozzle Target
-M109 S200 ; Wait for Nozzle
-
-M117 Homing...
-G28 ; Home all axes
-
-M117 Priming...
-G92 E0 ; Reset Extruder
-G1 Z2.0 F3000 ; Move Z Axis up little
-G1 X0.1 Y20 Z0.3 F5000.0 ; Move to start position
-G1 X0.1 Y100.0 Z0.3 F1500.0 E15 ; Draw the first line (shortened)
-G1 X0.4 Y100.0 Z0.3 F5000.0 ; Move to side a little
-G1 X0.4 Y20 Z0.3 F1500.0 E30 ; Draw the second line
-G92 E0 ; Reset Extruder
-G1 Z2.0 F3000 ; Move Z Axis up little
-
-M117 Printing Test Pattern...
-G1 X100 Y100 F9000 ; Move to center
-G1 Z0.3 F3000
-G1 X120 Y100 E2 F1800 ; Line 1
-G1 X120 Y120 E4 ; Line 2
-G1 X100 Y120 E6 ; Line 3
-G1 X100 Y100 E8 ; Line 4
-
-M117 Cooling down...
-M104 S0 ; Turn off nozzle
-M140 S0 ; Turn off bed
-G28 X0 Y0 ; Home X and Y
-M84 ; Disable motors
-M117 Print Finished!
-`;
-
-            // Create a temporary file instead of using Blob (which fails in some RN envs)
-            const fileUri = await moonraker.createDummyGcodeFile(gcodeFile, gcodeContent);
+            console.log(`Uploading ${gcodeFile} from ${fileUriToUpload}`);
 
             // Upload to Moonraker
-            const uploadResult = await moonraker.uploadFile(activePrinter.host, fileUri, gcodeFile);
+            const uploadResult = await moonraker.uploadFile(activePrinter.host, fileUriToUpload, gcodeFile);
             const uploadedPath = uploadResult.result?.item?.path || gcodeFile;
 
             alert(`✅ Upload successful!\n${gcodeFile} uploaded to ${activePrinter.name}`);
 
-            // Start print if requested
             if (startPrint) {
                 await moonraker.startPrint(activePrinter.host, uploadedPath);
                 alert(`🖨️ Print started!\n${gcodeFile} is now printing`);
@@ -148,14 +145,10 @@ M117 Print Finished!
 
     const handleImportConfig = async () => {
         try {
-            const result = await DocumentPicker.getDocumentAsync({
-                type: 'application/json',
-            });
-
+            const result = await DocumentPicker.getDocumentAsync({ type: 'application/json' });
             if (!result.canceled) {
                 const response = await fetch(result.assets[0].uri);
                 const fileContent = await response.json();
-
                 if (fileContent.name && fileContent.layerHeight) {
                     addProfile(fileContent);
                     alert('Profile imported successfully!');
@@ -171,6 +164,14 @@ M117 Print Finished!
 
     return (
         <View style={styles.container}>
+            {/* Hidden Bridge */}
+            <SlicerBridge
+                ref={slicerBridgeRef}
+                onStatusUpdate={(status) => console.log('Slicer Status:', status)}
+                onComplete={handleSliceComplete}
+                onError={handleSliceError}
+            />
+
             <View style={styles.header}>
                 <Text style={styles.title}>Slicer Settings</Text>
                 <TouchableOpacity style={styles.importBtn} onPress={handleImportConfig}>
@@ -196,6 +197,47 @@ M117 Print Finished!
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
+                </View>
+
+                {/* Temperature Controls */}
+                <View style={styles.section}>
+                    <View style={styles.labelRow}>
+                        <Thermometer size={20} color="#EF4444" />
+                        <Text style={styles.sectionTitle}>Nozzle Temperature: {nozzleTemp}°C</Text>
+                    </View>
+                    <View style={styles.sliderContainer}>
+                        <Slider
+                            style={styles.slider}
+                            minimumValue={180}
+                            maximumValue={280}
+                            step={5}
+                            value={nozzleTemp}
+                            onValueChange={setNozzleTemp}
+                            minimumTrackTintColor="#EF4444"
+                            maximumTrackTintColor="#334155"
+                            thumbTintColor="#EF4444"
+                        />
+                    </View>
+                </View>
+
+                <View style={styles.section}>
+                    <View style={styles.labelRow}>
+                        <Thermometer size={20} color="#3B82F6" />
+                        <Text style={styles.sectionTitle}>Bed Temperature: {bedTemp}°C</Text>
+                    </View>
+                    <View style={styles.sliderContainer}>
+                        <Slider
+                            style={styles.slider}
+                            minimumValue={0}
+                            maximumValue={110}
+                            step={5}
+                            value={bedTemp}
+                            onValueChange={setBedTemp}
+                            minimumTrackTintColor="#3B82F6"
+                            maximumTrackTintColor="#334155"
+                            thumbTintColor="#3B82F6"
+                        />
+                    </View>
                 </View>
 
                 <View style={styles.section}>
@@ -283,19 +325,22 @@ M117 Print Finished!
                     <View style={styles.statusCard}>
                         <Text style={styles.statusIcon}>⚙️</Text>
                         <Text style={styles.statusText}>Slicing...</Text>
+                        <Text style={styles.statusSubText}>Processing Geometry...</Text>
                     </View>
                 )}
 
                 <View style={styles.buttonContainer}>
                     <TouchableOpacity style={styles.btnLocal} onPress={handleSliceLocal}>
                         <Cpu size={20} color="#F8FAFC" />
-                        <Text style={styles.btnText}>Slice on Phone (Cura)</Text>
+                        <Text style={styles.btnText}>Slice on Phone</Text>
                     </TouchableOpacity>
 
+                    {/*
                     <TouchableOpacity style={styles.btnRemote} onPress={handleSliceRemote}>
                         <Zap size={20} color="#F8FAFC" />
                         <Text style={styles.btnText}>Slice on Pi (Orca)</Text>
                     </TouchableOpacity>
+                    */}
                 </View>
             </ScrollView>
         </View>
@@ -476,6 +521,10 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
     },
+    statusSubText: {
+        color: '#64748B',
+        marginTop: 4,
+    },
     loadedFileCard: {
         backgroundColor: '#1E293B',
         padding: 16,
@@ -513,5 +562,12 @@ const styles = StyleSheet.create({
     warningSubtext: {
         color: '#94A3B8',
         fontSize: 12,
+    },
+    sliderContainer: {
+        paddingHorizontal: 8,
+    },
+    slider: {
+        width: '100%',
+        height: 40,
     },
 });

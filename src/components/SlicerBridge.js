@@ -1,33 +1,157 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { WebView } from 'react-native-webview';
 
-// HTML/JS bundle for the Slicer Bridge. 
-// Uses Cura WASM. This would ideally be a local asset or a hosted reliable URL.
+// A lightweight STL parser and G-code generator embedded in HTML/JS
 const SLICER_HTML = `
 <!DOCTYPE html>
 <html>
 <head>
-    <script src="https://cdn.jsdelivr.net/npm/cura-wasm@latest/dist/index.min.js"></script>
+    <style>body { font-family: sans-serif; color: white; background: #0F172A; text-align: center; padding: 20px; }</style>
 </head>
 <body>
+    <h2>Klip-slice Engine</h2>
+    <div id="status">Ready</div>
     <script>
+        const log = (msg) => {
+            document.getElementById('status').innerText = msg;
+            // Optional: send log back
+        };
+
+        // Helper: Parse STL (Binary)
+        function parseSTL(buffer) {
+            const data = new DataView(buffer);
+            const triangleCount = data.getUint32(80, true);
+            let offset = 84;
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+            let minZ = Infinity, maxZ = -Infinity;
+
+            for (let i = 0; i < triangleCount; i++) {
+                // Normal (12 bytes) - skip
+                // Vertex 1
+                const x1 = data.getFloat32(offset + 12, true);
+                const y1 = data.getFloat32(offset + 16, true);
+                const z1 = data.getFloat32(offset + 20, true);
+                // Vertex 2 ...
+                const x2 = data.getFloat32(offset + 24, true);
+                const y2 = data.getFloat32(offset + 28, true);
+                const z2 = data.getFloat32(offset + 32, true);
+                // Vertex 3 ...
+                const x3 = data.getFloat32(offset + 36, true);
+                const y3 = data.getFloat32(offset + 40, true);
+                const z3 = data.getFloat32(offset + 44, true);
+
+                [x1, x2, x3].forEach(v => { minX = Math.min(minX, v); maxX = Math.max(maxX, v); });
+                [y1, y2, y3].forEach(v => { minY = Math.min(minY, v); maxY = Math.max(maxY, v); });
+                [z1, z2, z3].forEach(v => { minZ = Math.min(minZ, v); maxZ = Math.max(maxZ, v); });
+
+                offset += 50; // 12 normal + 3*12 verts + 2 attr
+            }
+            return { minX, maxX, minY, maxY, minZ, maxZ, triangleCount };
+        }
+
+        // Helper: Base64 to ArrayBuffer
+        function base64ToArrayBuffer(base64) {
+            const binary_string = window.atob(base64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary_string.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
         window.addEventListener('message', async (event) => {
             const { type, payload } = JSON.parse(event.data);
             if (type === 'SLICE') {
                 try {
-                    // Logic to load STL, apply profiles, and run CuraEngine via WASM
-                    window.ReactNativeWebView.postMessage(JSON.stringify({ 
-                        type: 'STATUS', 
-                        payload: 'Slicing started...' 
-                    }));
+                    log('Parsing STL...');
+                    const { stlData, settings } = payload;
+                    const buffer = base64ToArrayBuffer(stlData);
+                    const bounds = parseSTL(buffer);
                     
-                    // Actual Cura-WASM implementation here
-                    // ...
+                    log(\`Analyzed: \${bounds.triangleCount} triangles\`);
                     
+                    // Simple G-code Generation based on Bounds
+                    // This creates a "Bounding Box Print" which is valid for testing geometry presence
+                    
+                    const { minX, maxX, minY, maxY } = bounds;
+                    const width = maxX - minX;
+                    const depth = maxY - minY;
+                    const centerX = minX + (width / 2);
+                    const centerY = minY + (depth / 2);
+                    
+                    // Center object on bed (assume 220x220 bed for now, or just offset)
+                    // Let's assume the STL coordinates are absolute, or we shift them to center (110, 110)
+                    // For safety, let's just use the observed size to generate a box at center of bed
+                    
+                    const bedCenter = 110;
+                    const startX = bedCenter - (width / 2);
+                    const startY = bedCenter - (depth / 2);
+                    const endX = startX + width;
+                    const endY = startY + depth;
+
+                    const date = new Date().toISOString();
+                    const { bedTemp, nozzleTemp, layerHeight } = settings;
+
+                    let gcode = \`; Generated by Klip-slice (Client Engine)
+; Date: \${date}
+; Geometry: \${width.toFixed(1)}x\${depth.toFixed(1)}mm
+; Min/Max: X[\${minX.toFixed(1)},\${maxX.toFixed(1)}] Y[\${minY.toFixed(1)},\${maxY.toFixed(1)}]
+; Settings: Bed:\${bedTemp} Nozzle:\${nozzleTemp} LH:\${layerHeight}
+
+M140 S\${bedTemp}
+M104 S\${nozzleTemp}
+M190 S\${bedTemp}
+M109 S\${nozzleTemp}
+G28
+G92 E0
+G1 Z5 F3000
+
+; Priming
+G1 X0.1 Y20 Z0.3 F5000.0
+G1 X0.1 Y100.0 Z0.3 F1500.0 E15
+G1 X0.4 Y100.0 Z0.3 F5000.0
+G1 X0.4 Y20 Z0.3 F1500.0 E30
+G92 E0
+
+; Move to Object Start (Bounding Box)
+G1 Z\${layerHeight} F3000
+G1 X\${startX.toFixed(2)} Y\${startY.toFixed(2)} F9000
+
+; Print Bounding Box Skirt
+G1 X\${endX.toFixed(2)} Y\${startY.toFixed(2)} E2 F1800
+G1 X\${endX.toFixed(2)} Y\${endY.toFixed(2)} E4
+G1 X\${startX.toFixed(2)} Y\${endY.toFixed(2)} E6
+G1 X\${startX.toFixed(2)} Y\${startY.toFixed(2)} E8
+\`;
+
+                    // Add a simple fill pattern (ZigZag)
+                    gcode += \`
+; infill pattern
+\`;
+                    let e = 8;
+                    const step = 5; // 5mm step
+                    for (let y = startY + 2; y < endY - 2; y += step) {
+                        e += 1;
+                        gcode += \`G1 X\${startX + 2} Y\${y.toFixed(2)} E\${e.toFixed(2)} F1800\\n\`;
+                        e += 1;
+                        gcode += \`G1 X\${endX - 2} Y\${y.toFixed(2)} E\${e.toFixed(2)}\\n\`;
+                    }
+
+                    gcode += \`
+; Footer
+M104 S0
+M140 S0
+G28 X0 Y0
+M84
+\`;
+
                     window.ReactNativeWebView.postMessage(JSON.stringify({ 
                         type: 'COMPLETE', 
-                        payload: 'G-code generated (Mock)' 
+                        payload: gcode 
                     }));
+                    
                 } catch (e) {
                     window.ReactNativeWebView.postMessage(JSON.stringify({ 
                         type: 'ERROR', 
@@ -41,28 +165,39 @@ const SLICER_HTML = `
 </html>
 `;
 
-export default function SlicerBridge({ onStatusUpdate, onComplete, onError }) {
+const SlicerBridge = forwardRef(({ onStatusUpdate, onComplete, onError }, ref) => {
     const webViewRef = useRef(null);
 
-    const onMessage = (event) => {
-        const { type, payload } = JSON.parse(event.nativeEvent.data);
-        if (type === 'STATUS') onStatusUpdate(payload);
-        if (type === 'COMPLETE') onComplete(payload);
-        if (type === 'ERROR') onError(payload);
-    };
+    useImperativeHandle(ref, () => ({
+        startSlicing: (stlData, settings) => {
+            const msg = JSON.stringify({ type: 'SLICE', payload: { stlData, settings } });
+            if (webViewRef.current) {
+                webViewRef.current.postMessage(msg);
+            }
+        }
+    }));
 
-    const startSlicing = (stlData, profile) => {
-        const msg = JSON.stringify({ type: 'SLICE', payload: { stlData, profile } });
-        webViewRef.current.postMessage(msg);
+    const onMessage = (event) => {
+        try {
+            const { type, payload } = JSON.parse(event.nativeEvent.data);
+            if (type === 'STATUS') onStatusUpdate && onStatusUpdate(payload);
+            if (type === 'COMPLETE') onComplete && onComplete(payload);
+            if (type === 'ERROR') onError && onError(payload);
+        } catch (err) {
+            console.error('Bridge Message Parse Error', err);
+        }
     };
 
     return (
         <WebView
             ref={webViewRef}
-            style={{ width: 0, height: 0, opacity: 0 }}
+            style={{ width: 0, height: 0, opacity: 0, position: 'absolute' }}
             source={{ html: SLICER_HTML }}
             onMessage={onMessage}
             javaScriptEnabled={true}
+            originWhitelist={['*']}
         />
     );
-}
+});
+
+export default SlicerBridge;

@@ -271,9 +271,13 @@ class MoonrakerClient {
         return this.sendGcode(host, `SET_VELOCITY_LIMIT ACCEL=${accel}`);
     }
 
-    getWebcamUrl(host) {
-        // Prefer port 80 webcam stream for Nginx setups
-        return `http://${host}:80/webcam/?action=stream`;
+    getWebcamUrl(host, port = 80) {
+        // Nginx/Mainsail standard
+        if (port === 80) {
+            return `http://${host}:80/webcam/?action=stream`;
+        }
+        // Crowsnest/mjpeg-streamer direct
+        return `http://${host}:${port}/?action=stream`;
     }
 
     // Helper to create a temporary dummy G-code file for testing

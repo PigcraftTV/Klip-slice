@@ -111,7 +111,18 @@ export default function PrinterDashboard() {
                         source={{ uri: webcamUrl }}
                         style={styles.webcamStream}
                         resizeMode="cover"
-                        onError={() => setWebcamError(true)}
+                        onError={() => {
+                            // Simple fallback logic: if we haven't tried fallback yet, try port 8080
+                            if (webcamUrl && webcamUrl.includes(':80/')) {
+                                console.log('Webcam port 80 failed, retrying 8080...');
+                                setWebcamUrl(moonraker.getWebcamUrl(activePrinter.host, 8080));
+                            } else if (webcamUrl && !webcamUrl.includes(':8080')) {
+                                // If it didn't have port 80 but failed, try 8080 anyway
+                                setWebcamUrl(moonraker.getWebcamUrl(activePrinter.host, 8080));
+                            } else {
+                                setWebcamError(true);
+                            }
+                        }}
                     />
                 ) : (
                     <View style={styles.webcamPlaceholder}>

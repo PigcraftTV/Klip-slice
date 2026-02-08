@@ -1,12 +1,11 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
-import { Cube, FileText, Info } from 'lucide-react-native';
 
 export default function STLPreview({ fileUri }) {
     if (!fileUri) {
         return (
             <View style={styles.emptyContainer}>
-                <Cube color="#475569" size={48} />
+                <Text style={styles.emptyIcon}>📦</Text>
                 <Text style={styles.emptyText}>No file loaded</Text>
                 <Text style={styles.emptySubtext}>Download an STL from the Browser tab</Text>
             </View>
@@ -18,16 +17,16 @@ export default function STLPreview({ fileUri }) {
     return (
         <View style={styles.container}>
             <View style={styles.iconContainer}>
-                <Cube color="#3B82F6" size={64} />
+                <Text style={styles.icon}>🔷</Text>
             </View>
             <View style={styles.infoContainer}>
                 <View style={styles.infoRow}>
-                    <FileText color="#94A3B8" size={18} />
+                    <Text style={styles.emoji}>📄</Text>
                     <Text style={styles.infoLabel}>File:</Text>
                     <Text style={styles.infoValue} numberOfLines={1}>{filename}</Text>
                 </View>
                 <View style={styles.infoRow}>
-                    <Info color="#94A3B8" size={18} />
+                    <Text style={styles.emoji}>✅</Text>
                     <Text style={styles.infoLabel}>Status:</Text>
                     <Text style={[styles.infoValue, styles.readyText]}>Ready to slice</Text>
                 </View>
@@ -93,5 +92,14 @@ const styles = StyleSheet.create({
         fontSize: 14,
         marginTop: 8,
         textAlign: 'center',
+    },
+    icon: {
+        fontSize: 64,
+    },
+    emptyIcon: {
+        fontSize: 48,
+    },
+    emoji: {
+        fontSize: 18,
     },
 });

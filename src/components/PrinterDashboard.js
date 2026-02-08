@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, Animated, ActivityIndicator, Image } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Animated, ActivityIndicator, Image, TouchableOpacity, TextInput } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { usePrinterStore } from '../store/useStore';
 import { Thermometer, Clock, FileText, Activity, Printer } from 'lucide-react-native';
 import { moonraker } from '../api/moonraker';
@@ -25,18 +26,28 @@ export default function PrinterDashboard() {
     const activePrinter = printers.find(p => p.id === selectedPrinterId);
     const [webcamUrl, setWebcamUrl] = useState(null);
     const [webcamError, setWebcamError] = useState(false);
+    const [refreshKey, setRefreshKey] = useState(0);
+    const [speedPercent, setSpeedPercent] = useState(100);
+    const [fanPercent, setFanPercent] = useState(100);
+    const [acceleration, setAcceleration] = useState('3000');
 
     useEffect(() => {
         if (activePrinter?.host) {
             moonraker.connect(activePrinter.host);
-            setWebcamUrl(`http://${activePrinter.host}/webcam/?action=stream`);
+            setWebcamUrl(`http://${activePrinter.host}/webcam/?action=snapshot`);
             setWebcamError(false);
-        }
 
-        return () => {
-            moonraker.disconnect();
-            setWebcamUrl(null);
-        };
+            // Refresh webcam at ~30 FPS (33ms) for smooth "stream"
+            const interval = setInterval(() => {
+                setRefreshKey(prev => prev + 1);
+            }, 33);
+
+            return () => {
+                clearInterval(interval);
+                moonraker.disconnect();
+                setWebcamUrl(null);
+            };
+        }
     }, [selectedPrinterId, activePrinter?.host]);
 
     if (!activePrinter) {
@@ -72,7 +83,7 @@ export default function PrinterDashboard() {
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 {webcamUrl && !webcamError ? (
                     <Image
-                        source={{ uri: webcamUrl }}
+                        source={{ uri: `${webcamUrl}&t=${refreshKey}` }}
                         style={styles.webcamStream}
                         resizeMode="cover"
                         onError={() => setWebcamError(true)}
@@ -88,14 +99,62 @@ export default function PrinterDashboard() {
 
                 <View style={styles.statsGrid}>
                     <View style={styles.card}>
-                        <Thermometer size={24} color="#EF4444" />
+                        <Text style={styles.cardIcon}>🔥</Text>
                         <Text style={styles.cardLabel}>Hotend</Text>
                         <Text style={styles.cardValue}>{temperature.tool.toFixed(1)}°C</Text>
                     </View>
                     <View style={styles.card}>
-                        <Thermometer size={24} color="#3B82F6" />
+                        <Text style={styles.cardIcon}>🛏️</Text>
                         <Text style={styles.cardLabel}>Bed</Text>
                         <Text style={styles.cardValue}>{temperature.bed.toFixed(1)}°C</Text>
+                    </View>
+                </View>
+
+                <View style={styles.controlsCard}>
+                    <Text style={styles.controlsTitle}>Printer Controls</Text>
+
+                    <View style={styles.controlRow}>
+                        <View style={styles.controlHeader}>
+                            <Text style={styles.controlLabel}>Speed: {Math.round(speedPercent)}%</Text>
+                        </View>
+                        <Slider
+                            style={styles.slider}
+                            minimumValue={50}
+                            maximumValue={200}
+                            value={speedPercent}
+                            onValueChange={setSpeedPercent}
+                            minimumTrackTintColor="#3B82F6"
+                            maximumTrackTintColor="#334155"
+                            thumbTintColor="#3B82F6"
+                        />
+                    </View>
+
+                    <View style={styles.controlRow}>
+                        <View style={styles.controlHeader}>
+                            <Text style={styles.controlLabel}>Fan: {Math.round(fanPercent)}%</Text>
+                        </View>
+                        <Slider
+                            style={styles.slider}
+                            minimumValue={0}
+                            maximumValue={100}
+                            value={fanPercent}
+                            onValueChange={setFanPercent}
+                            minimumTrackTintColor="#3B82F6"
+                            maximumTrackTintColor="#334155"
+                            thumbTintColor="#3B82F6"
+                        />
+                    </View>
+
+                    <View style={styles.controlRow}>
+                        <Text style={styles.controlLabel}>Acceleration (mm/s²)</Text>
+                        <TextInput
+                            style={styles.controlInput}
+                            value={acceleration}
+                            onChangeText={setAcceleration}
+                            keyboardType="numeric"
+                            placeholder="3000"
+                            placeholderTextColor="#475569"
+                        />
                     </View>
                 </View>
 
@@ -166,9 +225,56 @@ const styles = StyleSheet.create({
     },
     webcamStream: {
         height: 200,
-        backgroundColor: '#1E293B',
+        backgroundColor: '#000000',
         borderRadius: 24,
         overflow: 'hidden',
+    },
+    cardIcon: {
+        fontSize: 24,
+    },
+    controlsCard: {
+        backgroundColor: '#1E293B',
+        padding: 20,
+        borderRadius: 24,
+        gap: 16,
+    },
+    controlsTitle: {
+        color: '#F8FAFC',
+        fontSize: 18,
+        fontWeight: '700',
+        marginBottom: 8,
+    },
+    controlRow: {
+        gap: 12,
+    },
+    controlLabel: {
+        color: '#94A3B8',
+        fontSize: 14,
+        fontWeight: '600',
+        marginBottom: 8,
+    },
+    controlButtons: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    controlBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        backgroundColor: '#334155',
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    controlBtnActive: {
+        backgroundColor: '#3B82F6',
+    },
+    controlBtnText: {
+        color: '#94A3B8',
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    controlBtnTextActive: {
+        color: '#FFFFFF',
     },
     webcamText: {
         color: '#475569',
@@ -262,5 +368,21 @@ const styles = StyleSheet.create({
         fontSize: 14,
         marginTop: 8,
         textAlign: 'center',
+    },
+    slider: {
+        width: '100%',
+        height: 40,
+    },
+    controlHeader: {
+        marginBottom: 4,
+    },
+    controlInput: {
+        backgroundColor: '#334155',
+        color: '#F8FAFC',
+        padding: 12,
+        borderRadius: 12,
+        fontSize: 16,
+        fontWeight: '600',
+        marginTop: 8,
     },
 });

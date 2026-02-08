@@ -1,7 +1,8 @@
-import React from 'react';
-import { StyleSheet, View, Text, ScrollView, Animated } from 'react-native';
+import React, { useEffect } from 'react';
+import { StyleSheet, View, Text, ScrollView, Animated, ActivityIndicator } from 'react-native';
 import { usePrinterStore } from '../store/useStore';
-import { Thermometer, Clock, FileText, Activity } from 'lucide-react-native';
+import { Thermometer, Clock, FileText, Activity, Printer } from 'lucide-react-native';
+import { moonraker } from '../api/moonraker';
 
 const StatusBadge = ({ status }) => {
     const colors = {
@@ -19,13 +20,41 @@ const StatusBadge = ({ status }) => {
 };
 
 export default function PrinterDashboard() {
-    const { status, temperature, progress, currentFile, isConnected } = usePrinterStore();
+    const { printers, selectedPrinterId, activePrinterState } = usePrinterStore();
+    const { status, temperature, progress, currentFile, isConnected } = activePrinterState;
+    const activePrinter = printers.find(p => p.id === selectedPrinterId);
+
+    useEffect(() => {
+        if (activePrinter?.host) {
+            moonraker.connect(activePrinter.host);
+        }
+    }, [selectedPrinterId, activePrinter?.host]);
+
+    if (!activePrinter) {
+        return (
+            <View style={styles.centered}>
+                <Printer color="#64748B" size={48} />
+                <Text style={styles.noPrinter}>No printer selected</Text>
+                <Text style={styles.subText}>Add or select a printer in the Setup tab.</Text>
+            </View>
+        );
+    }
+
+    if (!isConnected && status !== 'error') {
+        return (
+            <View style={styles.centered}>
+                <ActivityIndicator color="#3B82F6" size="large" />
+                <Text style={styles.connecting}>Connecting to {activePrinter.name}...</Text>
+                <Text style={styles.subText}>{activePrinter.host}</Text>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
             <View style={styles.header}>
                 <View>
-                    <Text style={styles.title}>Printer Status</Text>
+                    <Text style={styles.title}>{activePrinter.name}</Text>
                     <Text style={styles.subtitle}>{isConnected ? 'Connected via Tailscale' : 'Waiting for connection...'}</Text>
                 </View>
                 <StatusBadge status={status} />
@@ -182,5 +211,30 @@ const styles = StyleSheet.create({
         color: '#94A3B8',
         fontSize: 14,
         flex: 1,
+    },
+    centered: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40,
+        backgroundColor: '#0F172A',
+    },
+    noPrinter: {
+        color: '#F8FAFC',
+        fontSize: 20,
+        fontWeight: '800',
+        marginTop: 20,
+    },
+    connecting: {
+        color: '#F8FAFC',
+        fontSize: 18,
+        fontWeight: '700',
+        marginTop: 20,
+    },
+    subText: {
+        color: '#64748B',
+        fontSize: 14,
+        marginTop: 8,
+        textAlign: 'center',
     },
 });

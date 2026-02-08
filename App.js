@@ -1,26 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, SafeAreaView, TouchableOpacity, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Globe, Cpu, LayoutDashboard } from 'lucide-react-native';
+import { Globe, Cpu, LayoutDashboard, Settings } from 'lucide-react-native';
 
 import Browser from './src/components/Browser';
 import PrinterDashboard from './src/components/PrinterDashboard';
 import STLPreview from './src/components/STLPreview';
 import SlicerConfig from './src/components/SlicerConfig';
-import { useAppStore } from './src/store/useStore';
+import PrinterManager from './src/components/PrinterManager';
+import { useAppStore, usePrinterStore } from './src/store/useStore';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('browser');
   const lastDownloadedFile = useAppStore((state) => state.lastDownloadedFile);
+  const { printers } = usePrinterStore();
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
+  useEffect(() => {
+    if (printers.length === 0) {
+      setActiveTab('settings');
+    }
+  }, [printers.length]);
 
-      <View style={styles.content}>
-        {activeTab === 'browser' && <Browser />}
-        {activeTab === 'dashboard' && <PrinterDashboard />}
-        {activeTab === 'slicer' && (
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'browser':
+        return <Browser />;
+      case 'dashboard':
+        return <PrinterDashboard />;
+      case 'slicer':
+        return (
           <View style={styles.slicerContainer}>
             <STLPreview fileUri={lastDownloadedFile} />
             <SlicerConfig
@@ -28,36 +36,58 @@ export default function App() {
               onSliceRemote={() => alert('Sending to Pi for Orca slicing...')}
             />
           </View>
-        )}
-      </View>
+        );
+      case 'settings':
+        return <PrinterManager onBack={() => setActiveTab('browser')} />;
+      default:
+        return <Browser />;
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar style="light" />
+
+      <View style={styles.content}>{renderContent()}</View>
 
       <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={styles.tab}
+        <TabButton
+          active={activeTab === 'browser'}
           onPress={() => setActiveTab('browser')}
-        >
-          <Globe color={activeTab === 'browser' ? '#3B82F6' : '#94A3B8'} size={24} />
-          <Text style={[styles.tabText, activeTab === 'browser' && styles.tabTextActive]}>Browse</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.tab}
+          icon={Globe}
+          label="Browse"
+        />
+        <TabButton
+          active={activeTab === 'slicer'}
           onPress={() => setActiveTab('slicer')}
-        >
-          <Cpu color={activeTab === 'slicer' ? '#3B82F6' : '#94A3B8'} size={24} />
-          <Text style={[styles.tabText, activeTab === 'slicer' && styles.tabTextActive]}>Slice</Text>
-          {lastDownloadedFile && <View style={styles.dot} />}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.tab}
+          icon={Cpu}
+          label="Slice"
+          badge={!!lastDownloadedFile}
+        />
+        <TabButton
+          active={activeTab === 'dashboard'}
           onPress={() => setActiveTab('dashboard')}
-        >
-          <LayoutDashboard color={activeTab === 'dashboard' ? '#3B82F6' : '#94A3B8'} size={24} />
-          <Text style={[styles.tabText, activeTab === 'dashboard' && styles.tabTextActive]}>Printer</Text>
-        </TouchableOpacity>
+          icon={LayoutDashboard}
+          label="Printer"
+        />
+        <TabButton
+          active={activeTab === 'settings'}
+          onPress={() => setActiveTab('settings')}
+          icon={Settings}
+          label="Setup"
+        />
       </View>
     </SafeAreaView>
+  );
+}
+
+function TabButton({ active, onPress, icon: Icon, label, badge }) {
+  return (
+    <TouchableOpacity style={styles.tab} onPress={onPress}>
+      <Icon color={active ? '#3B82F6' : '#94A3B8'} size={24} />
+      <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
+      {badge && <View style={styles.dot} />}
+    </TouchableOpacity>
   );
 }
 
@@ -71,7 +101,6 @@ const styles = StyleSheet.create({
   },
   slicerContainer: {
     flex: 1,
-    padding: 20,
     backgroundColor: '#0F172A',
   },
   tabBar: {

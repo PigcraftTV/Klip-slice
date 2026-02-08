@@ -1,19 +1,28 @@
 import React, { useRef, useState } from 'react';
-import { StyleSheet, View, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, TextInput, TouchableOpacity, ActivityIndicator, Text } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { ChevronLeft, ChevronRight, RotateCw, Home, Download } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system';
 import { useAppStore } from '../store/useStore';
 
-const INITIAL_URL = 'https://www.printables.com';
+const SOURCES = [
+    { name: 'Printables', url: 'https://www.printables.com' },
+    { name: 'MakerWorld', url: 'https://makerworld.com' },
+    { name: 'Thingiverse', url: 'https://www.thingiverse.com' },
+];
 
 export default function Browser() {
     const webViewRef = useRef(null);
-    const [url, setUrl] = useState(INITIAL_URL);
+    const [url, setUrl] = useState(SOURCES[0].url);
     const [canGoBack, setCanGoBack] = useState(false);
     const [canGoForward, setCanGoForward] = useState(false);
     const [loading, setLoading] = useState(false);
     const setLastDownloadedFile = useAppStore((state) => state.setLastDownloadedFile);
+
+    const navigateToSource = (sourceUrl) => {
+        setUrl(sourceUrl);
+        webViewRef.current?.injectJavaScript(`window.location.href = '${sourceUrl}'`);
+    };
 
     const handleNavigationStateChange = (navState) => {
         setCanGoBack(navState.canGoBack);
@@ -22,14 +31,13 @@ export default function Browser() {
     };
 
     const onShouldStartLoadWithRequest = (request) => {
-        // Detect STL or 3MF downloads
         const isModelFile = request.url.toLowerCase().endsWith('.stl') ||
             request.url.toLowerCase().endsWith('.3mf') ||
             request.url.includes('/download/');
 
         if (isModelFile && !request.url.includes('google.com')) {
             handleDownload(request.url);
-            return false; // Prevent WebView from loading the download URL
+            return false;
         }
         return true;
     };
@@ -44,15 +52,11 @@ export default function Browser() {
                 downloadUrl,
                 fileUri,
                 {},
-                (downloadProgress) => {
-                    // Could implement progress bar here
-                }
+                (downloadProgress) => { }
             );
 
             const { uri } = await downloadResumable.downloadAsync();
-            console.log('Finished downloading to ', uri);
             setLastDownloadedFile(uri);
-            // Trigger Slicing Modal/Screen here
             alert(`Downloaded: ${filename}\nReady to slice!`);
         } catch (e) {
             console.error(e);
@@ -64,6 +68,18 @@ export default function Browser() {
 
     return (
         <View style={styles.container}>
+            <View style={styles.sourceSelector}>
+                {SOURCES.map((s) => (
+                    <TouchableOpacity
+                        key={s.name}
+                        style={[styles.sourceBtn, url.includes(s.name.toLowerCase().replace(' ', '')) && styles.sourceBtnActive]}
+                        onPress={() => navigateToSource(s.url)}
+                    >
+                        <Text style={[styles.sourceText, url.includes(s.name.toLowerCase().replace(' ', '')) && styles.sourceTextActive]}>{s.name}</Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
             <View style={styles.addressBar}>
                 <TouchableOpacity onPress={() => webViewRef.current?.goBack()} disabled={!canGoBack}>
                     <ChevronLeft color={canGoBack ? '#F8FAFC' : '#475569'} size={24} />
@@ -83,7 +99,7 @@ export default function Browser() {
 
             <WebView
                 ref={webViewRef}
-                source={{ uri: INITIAL_URL }}
+                source={{ uri: SOURCES[0].url }}
                 onNavigationStateChange={handleNavigationStateChange}
                 onShouldStartLoadWithRequest={onShouldStartLoadWithRequest}
                 style={styles.webview}
@@ -96,7 +112,7 @@ export default function Browser() {
             />
 
             <View style={styles.bottomBar}>
-                <TouchableOpacity onPress={() => webViewRef.current?.injectJavaScript(`window.location.href = '${INITIAL_URL}'`)}>
+                <TouchableOpacity onPress={() => navigateToSource(SOURCES[0].url)}>
                     <Home color="#F8FAFC" size={24} />
                 </TouchableOpacity>
                 <Download color="#475569" size={24} />
@@ -109,6 +125,32 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#0F172A',
+    },
+    sourceSelector: {
+        flexDirection: 'row',
+        backgroundColor: '#1E293B',
+        padding: 8,
+        gap: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#334155',
+    },
+    sourceBtn: {
+        flex: 1,
+        paddingVertical: 8,
+        alignItems: 'center',
+        borderRadius: 8,
+        backgroundColor: '#334155',
+    },
+    sourceBtnActive: {
+        backgroundColor: '#3B82F6',
+    },
+    sourceText: {
+        color: '#94A3B8',
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    sourceTextActive: {
+        color: '#FFFFFF',
     },
     addressBar: {
         flexDirection: 'row',
@@ -124,7 +166,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         paddingHorizontal: 12,
         color: '#F8FAFC',
-        fontSize: 14,
+        fontSize: 12,
     },
     webview: {
         flex: 1,

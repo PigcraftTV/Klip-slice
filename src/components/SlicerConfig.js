@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Switch } from 'react-native';
-import { Layers, Thermometer, Box, Zap, Cpu } from 'lucide-react-native';
+import { Layers, Thermometer, Box, Zap, Cpu, Upload, Settings } from 'lucide-react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import { useAppStore } from '../store/useStore';
 
 const CONFIG_OPTIONS = {
     layerHeight: [0.12, 0.16, 0.2, 0.28],
@@ -8,15 +10,73 @@ const CONFIG_OPTIONS = {
 };
 
 export default function SlicerConfig({ onSliceLocal, onSliceRemote }) {
-    const [selectedLH, setSelectedLH] = useState(0.2);
-    const [selectedInfill, setSelectedInfill] = useState(15);
+    const { slicingProfiles, addProfile } = useAppStore();
+    const [selectedProfileId, setSelectedProfileId] = useState(slicingProfiles[0]?.id);
+    const selectedProfile = slicingProfiles.find(p => p.id === selectedProfileId) || slicingProfiles[0];
+
+    const [selectedLH, setSelectedLH] = useState(selectedProfile?.layerHeight || 0.2);
+    const [selectedInfill, setSelectedInfill] = useState(selectedProfile?.infill || 15);
     const [useSupports, setUseSupports] = useState(false);
+
+    useEffect(() => {
+        if (selectedProfile) {
+            setSelectedLH(selectedProfile.layerHeight);
+            setSelectedInfill(selectedProfile.infill);
+        }
+    }, [selectedProfileId]);
+
+    const handleImportConfig = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: 'application/json',
+            });
+
+            if (!result.canceled) {
+                const response = await fetch(result.assets[0].uri);
+                const fileContent = await response.json();
+
+                if (fileContent.name && fileContent.layerHeight) {
+                    addProfile(fileContent);
+                    alert('Profile imported successfully!');
+                } else {
+                    alert('Invalid profile format. Needs "name" and "layerHeight".');
+                }
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to import config');
+        }
+    };
 
     return (
         <View style={styles.container}>
-            <Text style={styles.title}>Slicing Configuration</Text>
+            <View style={styles.header}>
+                <Text style={styles.title}>Slicer Settings</Text>
+                <TouchableOpacity style={styles.importBtn} onPress={handleImportConfig}>
+                    <Upload size={20} color="#3B82F6" />
+                    <Text style={styles.importText}>Import</Text>
+                </TouchableOpacity>
+            </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.section}>
+                    <View style={styles.labelRow}>
+                        <Settings size={20} color="#94A3B8" />
+                        <Text style={styles.sectionTitle}>Profile</Text>
+                    </View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                        {slicingProfiles.map(p => (
+                            <TouchableOpacity
+                                key={p.id}
+                                style={[styles.chip, selectedProfileId === p.id && styles.chipActive]}
+                                onPress={() => setSelectedProfileId(p.id)}
+                            >
+                                <Text style={[styles.chipText, selectedProfileId === p.id && styles.chipTextActive]}>{p.name}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+
                 <View style={styles.section}>
                     <View style={styles.labelRow}>
                         <Layers size={20} color="#94A3B8" />
@@ -163,6 +223,26 @@ const styles = StyleSheet.create({
     btnText: {
         color: '#F8FAFC',
         fontSize: 16,
+        fontWeight: '700',
+    },
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    importBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#334155',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 10,
+    },
+    importText: {
+        color: '#3B82F6',
+        fontSize: 12,
         fontWeight: '700',
     },
 });

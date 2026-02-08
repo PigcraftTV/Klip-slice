@@ -64,17 +64,18 @@ class MoonrakerClient {
     handleMessage(data) {
         if (data.method === 'notify_status_update') {
             const update = data.params[0];
+            const { activePrinterState, updateActivePrinterState } = usePrinterStore.getState();
             const printerUpdate = {};
 
             if (update.extruder) {
                 printerUpdate.temperature = {
-                    ...usePrinterStore.getState().temperature,
+                    ...activePrinterState.temperature,
                     tool: update.extruder.temperature
                 };
             }
             if (update.heater_bed) {
                 printerUpdate.temperature = {
-                    ...usePrinterStore.getState().temperature,
+                    ...activePrinterState.temperature,
                     bed: update.heater_bed.temperature
                 };
             }
@@ -86,7 +87,7 @@ class MoonrakerClient {
                 printerUpdate.progress = update.display_status.progress;
             }
 
-            usePrinterStore.getState().updateStatus(printerUpdate);
+            updateActivePrinterState(printerUpdate);
         }
     }
 

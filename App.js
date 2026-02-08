@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, SafeAreaView, TouchableOpacity, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Globe, Cpu, LayoutDashboard, Settings } from 'lucide-react-native';
+import { Globe, Cpu, LayoutDashboard, Settings, FileText } from 'lucide-react-native';
 
 import Browser from './src/components/Browser';
 import PrinterDashboard from './src/components/PrinterDashboard';
@@ -30,6 +30,14 @@ export default function App() {
       case 'slicer':
         return (
           <View style={styles.slicerContainer}>
+            {lastDownloadedFile && (
+              <View style={styles.fileStatus}>
+                <FileText color="#3B82F6" size={20} />
+                <Text style={styles.fileStatusText} numberOfLines={1}>
+                  {lastDownloadedFile.split('/').pop()}
+                </Text>
+              </View>
+            )}
             <STLPreview fileUri={lastDownloadedFile} />
             <SlicerConfig
               onSliceLocal={() => alert('Starting local slice...')}
@@ -133,5 +141,22 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: '#EF4444',
+  },
+  fileStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#1E293B',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 16,
+    marginHorizontal: 20,
+    marginTop: 20,
+  },
+  fileStatusText: {
+    flex: 1,
+    color: '#F8FAFC',
+    fontSize: 14,
+    fontWeight: '600',
   }
 });

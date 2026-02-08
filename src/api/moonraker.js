@@ -4,18 +4,27 @@ class MoonrakerClient {
     constructor() {
         this.socket = null;
         this.reconnectTimer = null;
+        this.currentHost = null;
+        this.isConnecting = false;
+        this.shouldReconnect = true;
     }
 
     connect(host) {
-        if (this.socket) {
-            this.socket.close();
+        if (!host || this.isConnecting || (this.currentHost === host && this.socket?.readyState === WebSocket.OPEN)) {
+            return;
         }
+
+        this.disconnect();
+        this.currentHost = host;
+        this.isConnecting = true;
+        this.shouldReconnect = true;
 
         const wsUrl = `ws://${host}/websocket`;
         this.socket = new WebSocket(wsUrl);
 
         this.socket.onopen = () => {
             console.log('Connected to Moonraker');
+            this.isConnecting = false;
             usePrinterStore.getState().setConnectionStatus(true);
             this.subscribe();
         };
@@ -27,18 +36,39 @@ class MoonrakerClient {
 
         this.socket.onclose = () => {
             console.log('Moonraker connection closed');
+            this.isConnecting = false;
             usePrinterStore.getState().setConnectionStatus(false);
-            this.scheduleReconnect(host);
+
+            if (this.shouldReconnect) {
+                this.scheduleReconnect(host);
+            }
         };
 
         this.socket.onerror = (error) => {
             console.error('Moonraker WebSocket error:', error);
+            this.isConnecting = false;
         };
+    }
+
+    disconnect() {
+        this.shouldReconnect = false;
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+        if (this.socket) {
+            this.socket.close();
+            this.socket = null;
+        }
+        this.currentHost = null;
     }
 
     scheduleReconnect(host) {
         if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-        this.reconnectTimer = setTimeout(() => this.connect(host), 5000);
+        this.reconnectTimer = setTimeout(() => {
+            this.shouldReconnect = true;
+            this.connect(host);
+        }, 5000);
     }
 
     subscribe() {

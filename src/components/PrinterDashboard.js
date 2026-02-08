@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, Animated, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, View, Text, ScrollView, Animated, ActivityIndicator, Image } from 'react-native';
 import { usePrinterStore } from '../store/useStore';
 import { Thermometer, Clock, FileText, Activity, Printer } from 'lucide-react-native';
 import { moonraker } from '../api/moonraker';
@@ -23,11 +23,20 @@ export default function PrinterDashboard() {
     const { printers, selectedPrinterId, activePrinterState } = usePrinterStore();
     const { status, temperature, progress, currentFile, isConnected } = activePrinterState;
     const activePrinter = printers.find(p => p.id === selectedPrinterId);
+    const [webcamUrl, setWebcamUrl] = useState(null);
+    const [webcamError, setWebcamError] = useState(false);
 
     useEffect(() => {
         if (activePrinter?.host) {
             moonraker.connect(activePrinter.host);
+            setWebcamUrl(`http://${activePrinter.host}/webcam/?action=stream`);
+            setWebcamError(false);
         }
+
+        return () => {
+            moonraker.disconnect();
+            setWebcamUrl(null);
+        };
     }, [selectedPrinterId, activePrinter?.host]);
 
     if (!activePrinter) {
@@ -61,10 +70,21 @@ export default function PrinterDashboard() {
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent}>
-                <View style={styles.webcamPlaceholder}>
-                    <Activity size={32} color="#475569" />
-                    <Text style={styles.webcamText}>Webcam Stream</Text>
-                </View>
+                {webcamUrl && !webcamError ? (
+                    <Image
+                        source={{ uri: webcamUrl }}
+                        style={styles.webcamStream}
+                        resizeMode="cover"
+                        onError={() => setWebcamError(true)}
+                    />
+                ) : (
+                    <View style={styles.webcamPlaceholder}>
+                        <Activity size={32} color="#475569" />
+                        <Text style={styles.webcamText}>
+                            {webcamError ? 'Webcam Unavailable' : 'Webcam Stream'}
+                        </Text>
+                    </View>
+                )}
 
                 <View style={styles.statsGrid}>
                     <View style={styles.card}>
@@ -143,6 +163,12 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: '#334155',
         borderStyle: 'dashed',
+    },
+    webcamStream: {
+        height: 200,
+        backgroundColor: '#1E293B',
+        borderRadius: 24,
+        overflow: 'hidden',
     },
     webcamText: {
         color: '#475569',

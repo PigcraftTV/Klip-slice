@@ -1,49 +1,97 @@
-import React, { Suspense, useMemo } from 'react';
-import { View, StyleSheet, ActivityIndicator } from 'react-native';
-import { Canvas } from '@react-three/fiber/native';
-import { useSTL } from '@react-three/drei/native';
-import { PerspectiveCamera, OrbitControls, Environment } from '@react-three/drei/native';
-
-function Model({ url }) {
-    const geom = useSTL(url);
-
-    return (
-        <mesh geometry={geom} castShadow receiveShadow>
-            <meshStandardMaterial color="#3B82F6" roughness={0.3} metalness={0.8} />
-        </mesh>
-    );
-}
+import React from 'react';
+import { View, StyleSheet, Text } from 'react-native';
+import { Cube, FileText, Info } from 'lucide-react-native';
 
 export default function STLPreview({ fileUri }) {
-    if (!fileUri) return null;
+    if (!fileUri) {
+        return (
+            <View style={styles.emptyContainer}>
+                <Cube color="#475569" size={48} />
+                <Text style={styles.emptyText}>No file loaded</Text>
+                <Text style={styles.emptySubtext}>Download an STL from the Browser tab</Text>
+            </View>
+        );
+    }
+
+    const filename = fileUri.split('/').pop();
 
     return (
         <View style={styles.container}>
-            <Canvas shadows>
-                <Suspense fallback={null}>
-                    <PerspectiveCamera makeDefault position={[100, 100, 100]} />
-                    <ambientLight intensity={0.5} />
-                    <pointLight position={[100, 100, 100]} intensity={1} castShadow />
-                    <spotLight position={[-100, 100, 100]} angle={0.15} penumbra={1} intensity={1} />
-
-                    <Model url={fileUri} />
-
-                    <OrbitControls />
-                    <Environment preset="city" />
-                    <gridHelper args={[200, 20]} rotation={[0, 0, 0]} />
-                </Suspense>
-            </Canvas>
+            <View style={styles.iconContainer}>
+                <Cube color="#3B82F6" size={64} />
+            </View>
+            <View style={styles.infoContainer}>
+                <View style={styles.infoRow}>
+                    <FileText color="#94A3B8" size={18} />
+                    <Text style={styles.infoLabel}>File:</Text>
+                    <Text style={styles.infoValue} numberOfLines={1}>{filename}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                    <Info color="#94A3B8" size={18} />
+                    <Text style={styles.infoLabel}>Status:</Text>
+                    <Text style={[styles.infoValue, styles.readyText]}>Ready to slice</Text>
+                </View>
+            </View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
-        height: 300,
-        width: '100%',
         backgroundColor: '#1E293B',
-        borderRadius: 16,
-        overflow: 'hidden',
-        marginVertical: 16,
+        borderRadius: 24,
+        padding: 24,
+        marginHorizontal: 20,
+        marginBottom: 16,
+    },
+    emptyContainer: {
+        backgroundColor: '#1E293B',
+        borderRadius: 24,
+        padding: 40,
+        marginHorizontal: 20,
+        marginBottom: 16,
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#334155',
+        borderStyle: 'dashed',
+    },
+    iconContainer: {
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    infoContainer: {
+        gap: 12,
+    },
+    infoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    infoLabel: {
+        color: '#94A3B8',
+        fontSize: 14,
+        fontWeight: '600',
+        width: 60,
+    },
+    infoValue: {
+        flex: 1,
+        color: '#F8FAFC',
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    readyText: {
+        color: '#10B981',
+    },
+    emptyText: {
+        color: '#64748B',
+        fontSize: 18,
+        fontWeight: '700',
+        marginTop: 16,
+    },
+    emptySubtext: {
+        color: '#475569',
+        fontSize: 14,
+        marginTop: 8,
+        textAlign: 'center',
     },
 });

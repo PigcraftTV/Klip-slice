@@ -223,59 +223,58 @@ M117 Print ready!
                         trackColor={{ false: '#334155', true: '#3B82F6' }}
                     />
                 </View>
-            </ScrollView>
 
-            {lastDownloadedFile && (
-                <View style={styles.loadedFileCard}>
-                    <Text style={styles.loadedFileLabel}>Loaded File:</Text>
-                    <Text style={styles.loadedFileName}>{lastDownloadedFile.split('/').pop()}</Text>
-                </View>
-            )}
-
-            {!lastDownloadedFile && (
-                <View style={styles.warningCard}>
-                    <Text style={styles.warningText}>⚠️ No STL file loaded</Text>
-                    <Text style={styles.warningSubtext}>Download a file from the Browse tab first</Text>
-                </View>
-            )}
-
-            {sliceStatus === 'success' && gcodeFile && (
-                <View style={styles.successCard}>
-                    <Text style={styles.successIcon}>✅</Text>
-                    <Text style={styles.successTitle}>Slice Successful!</Text>
-                    <Text style={styles.successFile}>{gcodeFile}</Text>
-
-                    <View style={styles.uploadButtons}>
-                        <TouchableOpacity style={styles.uploadBtn} onPress={() => handleUpload(false)}>
-                            <Upload size={18} color="#F8FAFC" />
-                            <Text style={styles.uploadBtnText}>Upload</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.uploadBtnPrimary} onPress={() => handleUpload(true)}>
-                            <Upload size={18} color="#F8FAFC" />
-                            <Text style={styles.uploadBtnText}>Upload & Start</Text>
-                        </TouchableOpacity>
+                {lastDownloadedFile && (
+                    <View style={styles.loadedFileCard}>
+                        <Text style={styles.loadedFileLabel}>Loaded File:</Text>
+                        <Text style={styles.loadedFileName}>{lastDownloadedFile.split('/').pop()}</Text>
                     </View>
+                )}
+
+                {!lastDownloadedFile && (
+                    <View style={styles.warningCard}>
+                        <Text style={styles.warningText}>⚠️ No STL file loaded</Text>
+                        <Text style={styles.warningSubtext}>Download a file from the Browse tab first</Text>
+                    </View>
+                )}
+
+                {sliceStatus === 'success' && gcodeFile && (
+                    <View style={styles.successCard}>
+                        <Text style={styles.successIcon}>✅</Text>
+                        <Text style={styles.successTitle}>Slice Successful!</Text>
+                        <Text style={styles.successFile}>{gcodeFile}</Text>
+
+                        <View style={styles.uploadButtons}>
+                            <TouchableOpacity style={styles.uploadBtn} onPress={() => handleUpload(false)}>
+                                <Upload size={18} color="#F8FAFC" />
+                                <Text style={styles.uploadBtnText}>Upload</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.uploadBtnPrimary} onPress={() => handleUpload(true)}>
+                                <Upload size={18} color="#F8FAFC" />
+                                <Text style={styles.uploadBtnText}>Upload & Start</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
+
+                {sliceStatus === 'slicing' && (
+                    <View style={styles.statusCard}>
+                        <Text style={styles.statusIcon}>⚙️</Text>
+                        <Text style={styles.statusText}>Slicing...</Text>
+                    </View>
+                )}
+
+                <View style={styles.buttonContainer}>
+                    <TouchableOpacity style={styles.btnLocal} onPress={handleSliceLocal}>
+                        <Cpu size={20} color="#F8FAFC" />
+                        <Text style={styles.btnText}>Slice on Phone (Cura)</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.btnRemote} onPress={handleSliceRemote}>
+                        <Zap size={20} color="#F8FAFC" />
+                        <Text style={styles.btnText}>Slice on Pi (Orca)</Text>
+                    </TouchableOpacity>
                 </View>
-            )}
-
-            {sliceStatus === 'slicing' && (
-                <View style={styles.statusCard}>
-                    <Text style={styles.statusIcon}>⚙️</Text>
-                    <Text style={styles.statusText}>Slicing...</Text>
-                </View>
-            )}
-
-            <View style={styles.buttonContainer}>
-                <TouchableOpacity style={styles.btnLocal} onPress={handleSliceLocal}>
-                    <Cpu size={20} color="#F8FAFC" />
-                    <Text style={styles.btnText}>Slice on Phone (Cura)</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.btnRemote} onPress={handleSliceRemote}>
-                    <Zap size={20} color="#F8FAFC" />
-                    <Text style={styles.btnText}>Slice on Pi (Orca)</Text>
-                </TouchableOpacity>
-            </View>
         </View>
     );
 }

@@ -14,11 +14,39 @@ const SLICER_HTML = `
     <script>
         const log = (msg) => {
             document.getElementById('status').innerText = msg;
-            // Optional: send log back
         };
 
-        // Helper: Parse STL (Binary)
-        function parseSTL(buffer) {
+        const sendProgress = (percent) => {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ 
+                type: 'PROGRESS', 
+                payload: percent 
+            }));
+        };
+
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        // Helper: Base64 to ArrayBuffer (Chunked to avoid freezing)
+        async function base64ToArrayBuffer(base64) {
+            const binary_string = window.atob(base64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            const chunk = 500000; // 500KB chunks
+            
+            for (let i = 0; i < len; i += chunk) {
+                const end = Math.min(i + chunk, len);
+                for (let j = i; j < end; j++) {
+                    bytes[j] = binary_string.charCodeAt(j);
+                }
+                // Report read progress (0-10%)
+                const progress = Math.round((i / len) * 10);
+                sendProgress(progress);
+                await delay(0);
+            }
+            return bytes.buffer;
+        }
+
+        // Helper: Parse STL (Async/Chunked)
+        async function parseSTL(buffer) {
             const data = new DataView(buffer);
             const triangleCount = data.getUint32(80, true);
             let offset = 84;
@@ -26,65 +54,65 @@ const SLICER_HTML = `
             let minY = Infinity, maxY = -Infinity;
             let minZ = Infinity, maxZ = -Infinity;
 
-            for (let i = 0; i < triangleCount; i++) {
-                // Normal (12 bytes) - skip
-                // Vertex 1
-                const x1 = data.getFloat32(offset + 12, true);
-                const y1 = data.getFloat32(offset + 16, true);
-                const z1 = data.getFloat32(offset + 20, true);
-                // Vertex 2 ...
-                const x2 = data.getFloat32(offset + 24, true);
-                const y2 = data.getFloat32(offset + 28, true);
-                const z2 = data.getFloat32(offset + 32, true);
-                // Vertex 3 ...
-                const x3 = data.getFloat32(offset + 36, true);
-                const y3 = data.getFloat32(offset + 40, true);
-                const z3 = data.getFloat32(offset + 44, true);
+            const chunk = 5000; // Process 5000 triangles per tick
+            
+            for (let i = 0; i < triangleCount; i += chunk) {
+                const end = Math.min(i + chunk, triangleCount);
+                
+                for (let j = i; j < end; j++) {
+                    // Normal (12 bytes) - skip
+                    // Vertex 1
+                    const x1 = data.getFloat32(offset + 12, true);
+                    const y1 = data.getFloat32(offset + 16, true);
+                    const z1 = data.getFloat32(offset + 20, true);
+                    // Vertex 2 ...
+                    const x2 = data.getFloat32(offset + 24, true);
+                    const y2 = data.getFloat32(offset + 28, true);
+                    const z2 = data.getFloat32(offset + 32, true);
+                    // Vertex 3 ...
+                    const x3 = data.getFloat32(offset + 36, true);
+                    const y3 = data.getFloat32(offset + 40, true);
+                    const z3 = data.getFloat32(offset + 44, true);
 
-                [x1, x2, x3].forEach(v => { minX = Math.min(minX, v); maxX = Math.max(maxX, v); });
-                [y1, y2, y3].forEach(v => { minY = Math.min(minY, v); maxY = Math.max(maxY, v); });
-                [z1, z2, z3].forEach(v => { minZ = Math.min(minZ, v); maxZ = Math.max(maxZ, v); });
+                    [x1, x2, x3].forEach(v => { minX = Math.min(minX, v); maxX = Math.max(maxX, v); });
+                    [y1, y2, y3].forEach(v => { minY = Math.min(minY, v); maxY = Math.max(maxY, v); });
+                    [z1, z2, z3].forEach(v => { minZ = Math.min(minZ, v); maxZ = Math.max(maxZ, v); });
 
-                offset += 50; // 12 normal + 3*12 verts + 2 attr
+                    offset += 50; 
+                }
+                
+                // Report parse progress (10-50%)
+                const progress = 10 + Math.round((i / triangleCount) * 40);
+                sendProgress(progress);
+                await delay(0);
             }
             return { minX, maxX, minY, maxY, minZ, maxZ, triangleCount };
-        }
-
-        // Helper: Base64 to ArrayBuffer
-        function base64ToArrayBuffer(base64) {
-            const binary_string = window.atob(base64);
-            const len = binary_string.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binary_string.charCodeAt(i);
-            }
-            return bytes.buffer;
         }
 
         window.addEventListener('message', async (event) => {
             const { type, payload } = JSON.parse(event.data);
             if (type === 'SLICE') {
                 try {
-                    log('Parsing STL...');
+                    log('Decoding File...');
+                    sendProgress(0);
+                    
                     const { stlData, settings } = payload;
-                    const buffer = base64ToArrayBuffer(stlData);
-                    const bounds = parseSTL(buffer);
+                    const buffer = await base64ToArrayBuffer(stlData);
+                    
+                    log('Parsing STL...');
+                    const bounds = await parseSTL(buffer);
                     
                     log(\`Analyzed: \${bounds.triangleCount} triangles\`);
+                    sendProgress(50);
                     
-                    // Simple G-code Generation based on Bounds
-                    // This creates a "Bounding Box Print" which is valid for testing geometry presence
-                    
+                    // Generate G-code
                     const { minX, maxX, minY, maxY } = bounds;
                     const width = maxX - minX;
                     const depth = maxY - minY;
                     const centerX = minX + (width / 2);
                     const centerY = minY + (depth / 2);
                     
-                    // Center object on bed (assume 220x220 bed for now, or just offset)
-                    // Let's assume the STL coordinates are absolute, or we shift them to center (110, 110)
-                    // For safety, let's just use the observed size to generate a box at center of bed
-                    
+                    // Center on bed (110, 110)
                     const bedCenter = 110;
                     const startX = bedCenter - (width / 2);
                     const startY = bedCenter - (depth / 2);
@@ -126,17 +154,28 @@ G1 X\${startX.toFixed(2)} Y\${endY.toFixed(2)} E6
 G1 X\${startX.toFixed(2)} Y\${startY.toFixed(2)} E8
 \`;
 
-                    // Add a simple fill pattern (ZigZag)
+                    // Infill pattern (ZigZag)
                     gcode += \`
 ; infill pattern
 \`;
                     let e = 8;
-                    const step = 5; // 5mm step
+                    const step = 2; // Finer step for more lines
+                    const totalSteps = (endY - 2 - (startY + 2)) / step;
+                    let currentStep = 0;
+
                     for (let y = startY + 2; y < endY - 2; y += step) {
                         e += 1;
                         gcode += \`G1 X\${startX + 2} Y\${y.toFixed(2)} E\${e.toFixed(2)} F1800\\n\`;
                         e += 1;
                         gcode += \`G1 X\${endX - 2} Y\${y.toFixed(2)} E\${e.toFixed(2)}\\n\`;
+                        
+                        currentStep++;
+                        // Report generation progress (50-100%)
+                        if (currentStep % 10 === 0) {
+                            const genProgress = 50 + Math.round((currentStep / totalSteps) * 50);
+                            sendProgress(genProgress);
+                            await delay(0);
+                        }
                     }
 
                     gcode += \`
@@ -147,6 +186,7 @@ G28 X0 Y0
 M84
 \`;
 
+                    sendProgress(100);
                     window.ReactNativeWebView.postMessage(JSON.stringify({ 
                         type: 'COMPLETE', 
                         payload: gcode 
@@ -165,7 +205,7 @@ M84
 </html>
 `;
 
-const SlicerBridge = forwardRef(({ onStatusUpdate, onComplete, onError }, ref) => {
+const SlicerBridge = forwardRef(({ onStatusUpdate, onComplete, onError, onProgress }, ref) => {
     const webViewRef = useRef(null);
 
     useImperativeHandle(ref, () => ({
@@ -181,6 +221,7 @@ const SlicerBridge = forwardRef(({ onStatusUpdate, onComplete, onError }, ref) =
         try {
             const { type, payload } = JSON.parse(event.nativeEvent.data);
             if (type === 'STATUS') onStatusUpdate && onStatusUpdate(payload);
+            if (type === 'PROGRESS') onProgress && onProgress(payload);
             if (type === 'COMPLETE') onComplete && onComplete(payload);
             if (type === 'ERROR') onError && onError(payload);
         } catch (err) {

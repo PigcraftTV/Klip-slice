@@ -28,6 +28,7 @@ export default function SlicerConfig({ onSliceLocal, onSliceRemote }) {
     const [nozzleTemp, setNozzleTemp] = useState(200);
 
     const [sliceStatus, setSliceStatus] = useState(null); // null, 'slicing', 'success', 'error'
+    const [sliceProgress, setSliceProgress] = useState(0);
     const [gcodeFile, setGcodeFile] = useState(null);
     const [gcodeUri, setGcodeUri] = useState(null);
 
@@ -54,6 +55,8 @@ export default function SlicerConfig({ onSliceLocal, onSliceRemote }) {
 
         try {
             setSliceStatus('slicing');
+            setSliceProgress(0);
+
             // Read the file as Base64 to pass to WebView
             const fileContent = await FileSystem.readAsStringAsync(lastDownloadedFile, {
                 encoding: FileSystem.EncodingType.Base64,
@@ -77,8 +80,13 @@ export default function SlicerConfig({ onSliceLocal, onSliceRemote }) {
         }
     };
 
+    const handleSliceProgress = (progress) => {
+        setSliceProgress(progress);
+    };
+
     const handleSliceComplete = (gcode) => {
         setSliceStatus('success');
+        setSliceProgress(100);
         const filename = getGcodeFilename();
         setGcodeFile(filename);
         // Save the generated G-code to a temporary file
@@ -162,12 +170,15 @@ export default function SlicerConfig({ onSliceLocal, onSliceRemote }) {
         }
     };
 
+    // ... (rest of file)
+
     return (
         <View style={styles.container}>
             {/* Hidden Bridge */}
             <SlicerBridge
                 ref={slicerBridgeRef}
                 onStatusUpdate={(status) => console.log('Slicer Status:', status)}
+                onProgress={handleSliceProgress}
                 onComplete={handleSliceComplete}
                 onError={handleSliceError}
             />
@@ -324,7 +335,7 @@ export default function SlicerConfig({ onSliceLocal, onSliceRemote }) {
                 {sliceStatus === 'slicing' && (
                     <View style={styles.statusCard}>
                         <Text style={styles.statusIcon}>⚙️</Text>
-                        <Text style={styles.statusText}>Slicing...</Text>
+                        <Text style={styles.statusText}>Slicing... {sliceProgress}%</Text>
                         <Text style={styles.statusSubText}>Processing Geometry...</Text>
                     </View>
                 )}
@@ -334,13 +345,6 @@ export default function SlicerConfig({ onSliceLocal, onSliceRemote }) {
                         <Cpu size={20} color="#F8FAFC" />
                         <Text style={styles.btnText}>Slice on Phone</Text>
                     </TouchableOpacity>
-
-                    {/*
-                    <TouchableOpacity style={styles.btnRemote} onPress={handleSliceRemote}>
-                        <Zap size={20} color="#F8FAFC" />
-                        <Text style={styles.btnText}>Slice on Pi (Orca)</Text>
-                    </TouchableOpacity>
-                    */}
                 </View>
             </ScrollView>
         </View>

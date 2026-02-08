@@ -1,4 +1,5 @@
 import { usePrinterStore } from '../store/useStore';
+import * as FileSystem from 'expo-file-system';
 
 class MoonrakerClient {
     constructor() {
@@ -194,8 +195,10 @@ class MoonrakerClient {
             name: filename,
             type: 'application/octet-stream',
         });
+        formData.append('root', 'gcodes');
 
         try {
+            console.log(`Uploading ${filename} to ${host}...`);
             const response = await fetch(`http://${host}:7125/server/files/upload`, {
                 method: 'POST',
                 body: formData,
@@ -203,6 +206,12 @@ class MoonrakerClient {
                     'Content-Type': 'multipart/form-data',
                 },
             });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Upload failed: ${response.status} ${errorText}`);
+            }
+
             return await response.json();
         } catch (error) {
             console.error('Upload failed:', error);
@@ -219,6 +228,12 @@ class MoonrakerClient {
                 },
                 body: JSON.stringify({ filename }),
             });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Start print failed: ${response.status} ${errorText}`);
+            }
+
             return await response.json();
         } catch (error) {
             console.error('Start print failed:', error);
@@ -257,8 +272,22 @@ class MoonrakerClient {
     }
 
     getWebcamUrl(host) {
-        // Try common webcam endpoints
-        return `http://${host}:8080/?action=stream`;
+        // Prefer port 80 webcam stream for Nginx setups
+        return `http://${host}:80/webcam/?action=stream`;
+    }
+
+    // Helper to create a temporary dummy G-code file for testing
+    async createDummyGcodeFile(filename, content) {
+        try {
+            const fileUri = `${FileSystem.cacheDirectory}${filename}`;
+            await FileSystem.writeAsStringAsync(fileUri, content, {
+                encoding: FileSystem.EncodingType.UTF8,
+            });
+            return fileUri;
+        } catch (error) {
+            console.error('Failed to create dummy G-code file:', error);
+            throw error;
+        }
     }
 }
 

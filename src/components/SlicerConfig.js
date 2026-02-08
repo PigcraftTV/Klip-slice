@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Switch } from 're
 import { Layers, Thermometer, Box, Zap, Cpu, Upload, Settings } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAppStore, usePrinterStore } from '../store/useStore';
+import { moonraker } from '../api/moonraker';
 
 const CONFIG_OPTIONS = {
     layerHeight: [0.12, 0.16, 0.2, 0.28],
@@ -66,6 +67,8 @@ export default function SlicerConfig({ onSliceLocal, onSliceRemote }) {
         onSliceRemote?.();
     };
 
+
+
     const handleUpload = async (startPrint = false) => {
         const { printers, selectedPrinterId } = usePrinterStore.getState();
         const activePrinter = printers.find(p => p.id === selectedPrinterId);
@@ -85,44 +88,25 @@ G1 Z15.0 F6000 ; Move the platform down 15mm
 M117 Print ready!
 `;
 
-            // Create a blob and form data for upload
-            const blob = new Blob([gcodeContent], { type: 'text/plain' });
-            const formData = new FormData();
-            formData.append('file', blob, gcodeFile);
-            formData.append('root', 'gcodes');
+            // Create a temporary file instead of using Blob (which fails in some RN envs)
+            const fileUri = await moonraker.createDummyGcodeFile(gcodeFile, gcodeContent);
 
             // Upload to Moonraker
-            const uploadResponse = await fetch(`http://${activePrinter.host}:7125/server/files/upload`, {
-                method: 'POST',
-                body: formData,
-            });
+            await moonraker.uploadFile(activePrinter.host, fileUri, gcodeFile);
 
-            if (!uploadResponse.ok) {
-                throw new Error(`Upload failed: ${uploadResponse.statusText}`);
-            }
-
-            const uploadData = await uploadResponse.json();
             alert(`✅ Upload successful!\n${gcodeFile} uploaded to ${activePrinter.name}`);
 
             // Start print if requested
             if (startPrint) {
-                const printResponse = await fetch(`http://${activePrinter.host}:7125/printer/print/start`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filename: `gcodes/${gcodeFile}` }),
-                });
-
-                if (!printResponse.ok) {
-                    throw new Error(`Start print failed: ${printResponse.statusText}`);
-                }
-
+                await moonraker.startPrint(activePrinter.host, `gcodes/${gcodeFile}`);
                 alert(`🖨️ Print started!\n${gcodeFile} is now printing`);
             }
         } catch (error) {
-            console.error('Upload error:', error);
-            alert(`❌ Upload failed:\n${error.message}`);
+            console.error('Upload/Print error:', error);
+            alert(`❌ Action failed:\n${error.message}`);
         }
     };
+
 
     const handleImportConfig = async () => {
         try {
@@ -275,6 +259,7 @@ M117 Print ready!
                         <Text style={styles.btnText}>Slice on Pi (Orca)</Text>
                     </TouchableOpacity>
                 </View>
+            </ScrollView>
         </View>
     );
 }

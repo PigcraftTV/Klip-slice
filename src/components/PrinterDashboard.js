@@ -65,8 +65,8 @@ export default function PrinterDashboard() {
     useEffect(() => {
         if (activePrinter?.host) {
             moonraker.connect(activePrinter.host);
-            // Webcam on port 80
-            setWebcamUrl(`http://${activePrinter.host}:80/webcam/?action=stream`);
+            // Webcam - use unified logic respecting Nginx/Port 80
+            setWebcamUrl(moonraker.getWebcamUrl(activePrinter.host));
             setWebcamError(false);
         }
 

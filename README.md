@@ -1,113 +1,59 @@
-# Remote Slicing & Printing for Klipper (Orca + Cura)
+# Klip-slice 🛸🛰️
 
-This project provides a **remote slicing workflow for Klipper-based 3D printers**.
+**Klip-slice** is a premium open-source mobile companion for 3D printing enthusiasts. It bridges the gap between searching for models and starting a print, all from your Android or iOS device.
 
-- **Server-side slicing** is done using **OrcaSlicer (CLI / headless)** on a Raspberry Pi
-- **Local slicing** is optionally done with **Cura (WASM)** on a desktop machine
-- G-Code is sent to Klipper via **Moonraker**
-- Designed for LAN / VPN usage (e.g. Tailscale)
+## 🚀 Key Features
 
-The goal is a **fully open-source, self-hosted alternative** to cloud-based slicing solutions.
+- **🌐 Smart Model Sourcing**: Integrated browser for **Printables**, **MakerWorld**, and **Thingiverse**.
+  - *Automagic Interception*: Detects `.stl` and `.3mf` downloads and imports them directly into the app.
+- **👁️ 3D Inspect Mode**: High-performance 3D preview using React Three Fiber. Inspect your models with smooth orbit controls before slicing.
+- **✂️ Hybrid Slicing Engine**:
+  - **Local Slicing**: Run **Cura Engine (WASM)** directly on your phone for quick jobs.
+  - **Remote Slicing**: One-tap trigger to run **OrcaSlicer CLI** on your Raspberry Pi for maximum quality.
+- **📊 Klipper Dashboard**: Full real-time telemetry via **Moonraker**.
+  - Monitor temperatures, job progress, and fan speeds.
+  - Securely connect from anywhere via **Tailscale**.
 
----
+## 🏗️ Architecture
 
+- **Framework**: React Native with [Expo SDK 52](https://expo.dev)
+- **State Management**: [Zustand](https://github.com/pmndrs/zustand)
+- **3D Graphics**: [@react-three/fiber](https://github.com/pmndrs/react-three-fiber) & [Expo GL](https://docs.expo.dev/versions/latest/sdk/gl-view/)
+- **Networking**: WebSockets for Moonraker real-time data.
 
----
+## 🛠️ Setup & Local Development
 
-## Slicing Modes
+### 1. Requirements
+- Node.js & npm
+- Android Studio / Xcode
+- A Raspberry Pi running Klipper/Moonraker (for remote features)
+- Tailscale (recommended for remote access)
 
-### 1️⃣ Server-Side Slicing (OrcaSlicer – Recommended)
-
-- OrcaSlicer runs **headless** on the Raspberry Pi
-- Models are uploaded to the Pi
-- Slicing is done via **OrcaSlicer CLI**
-- Generated G-Code is placed directly into Klipper's `gcodes` directory
-- Moonraker detects the file automatically
-
-**Advantages**
-- No Android/Client slicing required
-- Consistent profiles
-- Works over VPN (e.g. Tailscale)
-- Fully open source
-
----
-
-### 2️⃣ Local Slicing (Cura – WASM)
-
-- Cura runs locally on a smartphone
-- G-Code is uploaded manually or via Moonraker
-
-**Advantages**
-- Fast preview & manual tuning
-- No server load
-- Familiar Cura workflow
-
----
-
-## Requirements
-
-### Server (Raspberry Pi)
-- Raspberry Pi 4 / 5 (4GB+ recommended)
-- Klipper
-- Moonraker
-- OrcaSlicer (CLI usage)
-- Linux (Debian / Raspberry Pi OS)
-- Optional: Docker
-- Optional: Tailscale
-
-### Client
-- Web browser / API client
-- Optional: Android device
-- Optional: Cura (Desktop)
-
----
-
-## OrcaSlicer CLI Usage (Example)
-
+### 2. Installation
 ```bash
-orca-slicer \
-  --slice 0 \
-  --load-settings profiles/printer.json \
-  --load-filaments profiles/filament.json \
-  --outputdir /home/pi/printer_data/gcodes \
-  models/example.stl
+npm install
+```
 
+### 3. Running Locally
+```bash
+# Start the app on Android (requires local SDK)
+npm run android
 
-⚠️ Note: OrcaSlicer CLI is not officially documented and may change between versions.
+# Start the app on iOS (requires macOS & Xcode)
+npm run ios
+```
 
-Networking
+## 📦 Building for Android
+To build a local APK without cloud dependencies:
+```bash
+npx expo prebuild
+cd android
+./gradlew assembleRelease
+```
+The APK will be located in `android/app/build/outputs/apk/release/`.
 
-This setup is intended to run:
-
-locally in LAN or
-
-securely over VPN (e.g. Tailscale)
-
-No cloud services required.
-
-License
-
-This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
-
-It uses OrcaSlicer, which is also licensed under AGPL-3.0.
-If you run this software as a service, you must provide the source code
-to users interacting with it over a network.
-
-See the LICENSE file for details.
-
-Disclaimer
-
-This project is not affiliated with:
-
-OrcaSlicer
-
-Ultimaker Cura
-
-Klipper
-
-Moonraker
-
-All trademarks belong to their respective owners.
-
+## 🤝 Open Source
+This project is built for the community. Feel free to contribute by opening issues or pull requests.
 
 ---
+*Developed with ❤️ for the 3D Printing Community.*

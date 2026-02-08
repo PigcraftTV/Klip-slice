@@ -92,13 +92,14 @@ M117 Print ready!
             const fileUri = await moonraker.createDummyGcodeFile(gcodeFile, gcodeContent);
 
             // Upload to Moonraker
-            await moonraker.uploadFile(activePrinter.host, fileUri, gcodeFile);
+            const uploadResult = await moonraker.uploadFile(activePrinter.host, fileUri, gcodeFile);
+            const uploadedPath = uploadResult.result?.item?.path || gcodeFile;
 
             alert(`✅ Upload successful!\n${gcodeFile} uploaded to ${activePrinter.name}`);
 
             // Start print if requested
             if (startPrint) {
-                await moonraker.startPrint(activePrinter.host, `gcodes/${gcodeFile}`);
+                await moonraker.startPrint(activePrinter.host, uploadedPath);
                 alert(`🖨️ Print started!\n${gcodeFile} is now printing`);
             }
         } catch (error) {
